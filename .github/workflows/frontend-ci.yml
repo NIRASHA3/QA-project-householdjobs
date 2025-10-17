@@ -1,22 +1,49 @@
-﻿name: Frontend CI/CD
+name: Frontend CI/CD Pipeline
+
 on:
   push:
-    branches: [main]
-    paths: ['frontend/**']
-  pull_request:
-    branches: [main]
-    paths: ['frontend/**']
+    branches: [ main ]
+
 jobs:
-  build:
+  build-and-e2e-test:
+    name: Build React App & Run E2E Tests
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: ./frontend
-      - run: npm run build
-        working-directory: ./frontend
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build project
+      run: CI=false npm run build
+      env:
+        REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL || 'http://localhost:8000' }}
+
+    - name: Install Chrome for Selenium
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y chromium-browser chromium-chromedriver
+
+    - name: Serve React App for Testing
+      run: |
+        npm install -g serve
+        npx serve -s build -p 3000 > serve.log 2>&1 &
+        echo "Waiting for server to start..."
+        sleep 10
+        echo "Server started successfully"
+
+    - name: Run All Selenium Tests
+      run: |
+        npm run selenium-test
+        npm run selenium-add
+      env:
+        FRONTEND_URL: "http://localhost:3000"
+        REACT_APP_BACKEND_URL: ${{ secrets.REACT_APP_BACKEND_URL || 'http://localhost:8000' }}
